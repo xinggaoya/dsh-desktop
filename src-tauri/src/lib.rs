@@ -4,10 +4,11 @@ use std::{
     time::{Duration, Instant},
 };
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder},
+    menu::{CheckMenuItem, CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, RunEvent, WindowEvent,
 };
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
 const SERVICE_URL: &str = "http://127.0.0.1:3080";
 const SERVICE_HOST: &str = "127.0.0.1";
@@ -26,6 +27,15 @@ struct ServiceProcess(Mutex<Option<Child>>);
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // 单例：二次启动时不新开进程，而是唤起已有实例的主窗口
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            show_main_window(app);
+        }))
+        // 开机自启（托盘菜单提供开关）
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec![]),
+        ))
         // 点击关闭按钮仅隐藏到托盘，应用继续在后台运行
         .on_window_event(|window, event| {
             if window.label() == WINDOW_LABEL {
@@ -81,24 +91,30 @@ pub fn run() {
         });
 }
 
-/// 构建系统托盘：左键单击显示主窗口，右键菜单提供「显示主窗口 / 退出」。
+/// 构建系统托盘：左键单击显示主窗口，右键菜单提供「开机自启 / 显示主窗口 / 退出」。
 fn build_tray<R: tauri::Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
+    let autostart_item = CheckMenuItemBuilder::with_id("autostart", "开机自启")
+        .checked(app.autolaunch().is_enabled().unwrap_or(false))
+        .build(app)?;
     let show_item = MenuItemBuilder::with_id("show", "显示主窗口").build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", "退出").build(app)?;
     let menu = MenuBuilder::new(app)
+        .item(&autostart_item)
         .item(&show_item)
         .item(&quit_item)
         .build()?;
 
     let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-icon.png"))?;
+    let autostart_handle = autostart_item.clone();
 
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
         .tooltip("dsh-desktop")
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| match event.id().0.as_str() {
+        .on_menu_event(move |app, event| match event.id().0.as_str() {
             "show" => show_main_window(app),
+            "autostart" => toggle_autostart(app, &autostart_handle),
             "quit" => app.exit(0),
             _ => {}
         })
@@ -115,6 +131,24 @@ fn build_tray<R: tauri::Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
         .build(app)?;
 
     Ok(())
+}
+
+/// 切换开机自启状态并同步托盘菜单勾选状态。
+fn toggle_autostart<R: tauri::Runtime>(app: &tauri::AppHandle<R>, item: &CheckMenuItem<R>) {
+    let launcher = app.autolaunch();
+    match launcher.is_enabled() {
+        Ok(true) => {
+            if launcher.disable().is_ok() {
+                let _ = item.set_checked(false);
+            }
+        }
+        Ok(false) => {
+            if launcher.enable().is_ok() {
+                let _ = item.set_checked(true);
+            }
+        }
+        Err(err) => eprintln!("query autostart state failed: {err}"),
+    }
 }
 
 fn show_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
