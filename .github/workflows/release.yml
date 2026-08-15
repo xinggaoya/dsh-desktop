@@ -66,6 +66,6 @@ jobs:
           tagName: v__VERSION__ # the action automatically replaces __VERSION__ with the app version
           releaseName: 'dsh-desktop v__VERSION__'
           releaseBody: 'See the assets to download and install this version.'
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
