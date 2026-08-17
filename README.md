@@ -11,8 +11,9 @@ DeepSeek Harness 的桌面端打包项目 —— 基于 [Tauri 2](https://v2.tau
 
 ## 功能特性
 
-- 🚀 **一键启动**：应用启动即拉起 dsh web 服务（`http://127.0.0.1:3080`），就绪后自动加载界面
+- 🚀 **启动选择页**：进入程序先选择启动方式（本机 Node.js / WSL），选定后拉起 dsh web 服务（`http://127.0.0.1:3080`），就绪后自动加载界面
 - 🚫 **无黑窗**：Windows 下使用 `CREATE_NO_WINDOW` 启动子进程，不会弹出控制台黑窗
+- 🔀 **WSL 启动支持**：可切换为在 WSL 发行版内拉起服务，端口经 localhost 转发，服务地址不变
 - 📌 **系统托盘**：点击关闭按钮仅隐藏到托盘，应用继续在后台运行；托盘左键恢复窗口，右键菜单提供「开机自启 / 显示主窗口 / 退出」
 - 🔂 **单实例**：重复启动不会开新进程，而是唤起已有实例的主窗口（即使藏在托盘也会拉出）
 - ⚡ **开机自启**：托盘菜单一键开关，随 Windows 登录自动启动
@@ -38,20 +39,32 @@ DeepSeek Harness 的桌面端打包项目 —— 基于 [Tauri 2](https://v2.tau
 
 ```
 启动 dsh-desktop
-  └─ spawn: npx --yes @deepseek-ai/dsh web   （无控制台窗口）
-       └─ 轮询 127.0.0.1:3080 直至服务就绪（最长 60s）
-            └─ 窗口 navigate 到服务地址，加载 DSH Web 界面
+  └─ 展示启动选择页（自动检测「本机 Node.js」与「WSL」的可用性）
+       ├─ 选择「本机 Node.js」→ spawn: npx --yes @deepseek-ai/dsh web        （无控制台窗口）
+       └─ 选择「WSL」        → spawn: wsl bash -lc "npx --yes @deepseek-ai/dsh web"
+            └─ 轮询 127.0.0.1:3080 直至服务就绪（最长 60s，WSL2 下端口经 localhost 转发，地址不变）
+                 └─ 窗口 navigate 到服务地址，加载 DSH Web 界面
 
 关闭窗口  → 仅隐藏到托盘，服务继续运行
-托盘「退出」→ 结束子进程树并退出应用
+托盘「退出」→ 结束子进程树并退出应用（WSL 模式先结束发行版内 dsh 进程，再回收 wsl.exe）
 ```
+
+## WSL 启动（Windows）
+
+启动时应用先展示选择页，可在「本机 Node.js」与「WSL」之间切换：
+
+- 选择页会自动检测可用性：本机装有 `npx` 时「本机 Node.js」可选；WSL 发行版内装有可用的 Node.js（npx）时「WSL」可选，不可用的选项置灰；
+- WSL 检测与启动均通过交互式 login shell（`wsl bash -il`）会话执行，apt / nvm / mise / asdf / fnm 等安装方式的 Node 环境均能生效；若发行版内未装 Node，`npx` 会经 Windows interop 静默回退到 Windows 的 Node——应用会识别并拦截这种情况（视为不可用），不会误用；
+- 服务地址保持 `http://127.0.0.1:3080` 不变——WSL2 会把发行版内监听的 `127.0.0.1` 端口转发到 Windows 本机；
+- 托盘「退出」时按启动时记录的进程组整组回收发行版内的 dsh 进程（npx → node 全链路，含 pkill 兜底），再回收 `wsl.exe`，不留残留。
 
 ## 环境要求
 
 | 环境 | 说明 |
 | --- | --- |
 | Windows 10 / 11 | 依赖 WebView2（Win11 自带，Win10 一般已随更新安装） |
-| Node.js ≥ 18 | 运行时通过 `npx` 拉取 `@deepseek-ai/dsh` |
+| Node.js ≥ 18（二选一） | Windows 本机，或 WSL 发行版内；运行时通过 `npx` 拉取 `@deepseek-ai/dsh` |
+| WSL（可选） | Windows 本机未装 Node.js 时可选择 WSL 启动，需发行版内已安装 Node.js（apt / nvm / mise 等均可） |
 | Rust（仅构建需要） | stable 工具链，<https://rustup.rs> |
 | pnpm（仅构建需要） | <https://pnpm.io> |
 
@@ -77,13 +90,14 @@ pnpm tauri build
 
 ```
 .
-├── src/                  # 前端壳页面（启动加载页）
-│   ├── index.html        # 加载页：品牌图标 + 启动状态
-│   └── icon.png          # 加载页图标（与 icons/icon.png 同步）
+├── src/                  # 前端壳页面（启动选择页）
+│   ├── index.html        # 启动选择页：选择启动方式（本机 / WSL）+ 启动状态
+│   └── icon.png          # 启动选择页图标（与 icons/icon.png 同步）
 └── src-tauri/
     ├── src/
     │   ├── main.rs       # 入口（release 下无控制台子系统）
-    │   └── lib.rs        # 服务拉起/回收、托盘、关闭进托盘、单例唤起、开机自启逻辑
+    │   ├── lib.rs        # 托盘、关闭进托盘、单例唤起、开机自启、Tauri 命令
+    │   └── service.rs    # dsh 服务拉起/回收（本机 npx / WSL 双模式）、可用性检测、就绪探测
     ├── icons/            # 由 tauri icon 生成的全套应用图标（含 tray-icon.png）
     ├── capabilities/     # Tauri 权限清单
     └── tauri.conf.json   # 窗口、打包（NSIS）、图标配置

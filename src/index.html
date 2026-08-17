@@ -8,9 +8,20 @@
     <style>
       :root {
         color-scheme: dark;
+        --bg: #0f172a;
+        --card: #1e293b;
+        --border: #334155;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #3b82f6;
+        --green: #34d399;
+        --red: #f87171;
       }
       * {
         box-sizing: border-box;
+      }
+      [hidden] {
+        display: none !important;
       }
       html,
       body {
@@ -21,30 +32,145 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #0f172a;
-        color: #e2e8f0;
+        background:
+          radial-gradient(1100px 500px at 50% -10%, rgba(59, 130, 246, 0.14), transparent 60%),
+          var(--bg);
+        color: var(--text);
         font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+        user-select: none;
+      }
+      .screen {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 32px;
       }
       .card {
+        width: 100%;
+        max-width: 620px;
         text-align: center;
-        padding: 24px;
       }
       .logo {
-        width: 96px;
-        height: 96px;
-        border-radius: 22px;
-        margin-bottom: 24px;
+        width: 84px;
+        height: 84px;
+        border-radius: 20px;
         box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
         user-select: none;
         -webkit-user-drag: none;
       }
+      h1 {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 16px 0 4px;
+      }
+      .subtitle {
+        color: var(--muted);
+        font-size: 14px;
+        margin: 0 0 28px;
+      }
+      .modes {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .mode {
+        flex: 1 1 240px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 22px 18px 18px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+        transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+      }
+      .mode:hover:not(:disabled) {
+        border-color: var(--accent);
+        transform: translateY(-2px);
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+      }
+      .mode:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+      .mode-icon {
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        background: rgba(59, 130, 246, 0.12);
+        color: #60a5fa;
+      }
+      .mode-icon svg {
+        width: 26px;
+        height: 26px;
+      }
+      .mode-name {
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .mode-desc {
+        color: var(--muted);
+        font-size: 12.5px;
+        line-height: 1.6;
+        min-height: 40px;
+      }
+      .mode-badge {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #475569;
+      }
+      .dot.ok {
+        background: var(--green);
+      }
+      .dot.busy {
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.25;
+        }
+      }
+      .tag {
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(59, 130, 246, 0.16);
+        color: #93c5fd;
+        font-size: 11.5px;
+      }
+      .error {
+        margin-top: 20px;
+        padding: 10px 14px;
+        border: 1px solid rgba(248, 113, 113, 0.4);
+        border-radius: 10px;
+        background: rgba(248, 113, 113, 0.1);
+        color: #fca5a5;
+        font-size: 13px;
+        line-height: 1.5;
+        text-align: left;
+      }
       .spinner {
-        width: 42px;
-        height: 42px;
+        width: 44px;
+        height: 44px;
         border: 4px solid #334155;
         border-top-color: #3b82f6;
         border-radius: 50%;
-        margin: 0 auto 20px;
+        margin-bottom: 22px;
         animation: spin 0.9s linear infinite;
       }
       @keyframes spin {
@@ -52,25 +178,146 @@
           transform: rotate(360deg);
         }
       }
-      h1 {
-        font-size: 18px;
-        font-weight: 600;
-        margin: 0 0 8px;
-      }
       #status {
-        color: #94a3b8;
-        font-size: 14px;
-        margin-top: 8px;
-        min-height: 20px;
+        color: var(--muted);
+        font-size: 13.5px;
+        max-width: 460px;
+        line-height: 1.6;
       }
     </style>
   </head>
   <body>
-    <div class="card">
-      <img class="logo" src="./icon.png" alt="DSH" />
+    <!-- 启动方式选择页 -->
+    <div class="screen" id="picker">
+      <div class="card">
+        <img class="logo" src="./icon.png" alt="DSH" />
+        <h1>DSH Desktop</h1>
+        <p class="subtitle">选择服务启动方式</p>
+        <div class="modes">
+          <button class="mode" id="mode-native" disabled>
+            <span class="mode-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2.5" y="4" width="19" height="13" rx="2" />
+                <path d="M8 21h8M12 17v4" />
+              </svg>
+            </span>
+            <span class="mode-name">本机 Node.js</span>
+            <span class="mode-desc">使用 Windows 本机的 Node.js / npx 拉起 dsh 服务</span>
+            <span class="mode-badge"><span class="dot busy" id="dot-native"></span><span id="badge-native">检测中…</span><span class="tag" id="tag-native" hidden>推荐</span></span>
+          </button>
+          <button class="mode" id="mode-wsl" disabled>
+            <span class="mode-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2.5" y="4" width="19" height="16" rx="2" />
+                <path d="m7 9 3.5 3L7 15M13 15h4" />
+              </svg>
+            </span>
+            <span class="mode-name">WSL</span>
+            <span class="mode-desc">在 WSL 发行版内拉起服务，端口经 localhost 转发，体验一致</span>
+            <span class="mode-badge"><span class="dot busy" id="dot-wsl"></span><span id="badge-wsl">检测中…</span><span class="tag" id="tag-wsl" hidden>推荐</span></span>
+          </button>
+        </div>
+        <div class="error" id="error" hidden></div>
+      </div>
+    </div>
+
+    <!-- 服务启动中 -->
+    <div class="screen" id="launching" hidden>
       <div class="spinner"></div>
-      <h1>正在启动 DSH 服务…</h1>
+      <h1 id="launching-title">正在启动服务…</h1>
       <div id="status"></div>
     </div>
+
+    <script>
+      (function () {
+        const inv = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+
+        const MODES = {
+          native: {
+            label: "本机 Node.js",
+            hint: "正在通过 Windows 本机的 npx 拉起服务，首次运行可能需要下载依赖…",
+          },
+          wsl: {
+            label: "WSL",
+            hint: "正在通过 WSL 发行版内的 npx 拉起服务，首次运行可能需要下载依赖…",
+          },
+        };
+        const avail = { native: false, wsl: false };
+
+        const $ = (id) => document.getElementById(id);
+
+        function showError(message) {
+          const box = $("error");
+          box.textContent = message;
+          box.hidden = false;
+        }
+
+        function setBadge(key, text, ok) {
+          const dot = $("dot-" + key);
+          dot.classList.remove("busy");
+          if (ok) dot.classList.add("ok");
+          $("badge-" + key).textContent = text;
+        }
+
+        function renderMode(key, available) {
+          avail[key] = available;
+          const btn = $("mode-" + key);
+          btn.disabled = !available;
+          setBadge(key, available ? "可用" : "未检测到", available);
+          if (available) {
+            btn.addEventListener("click", () => choose(key));
+          }
+        }
+
+        function markRecommended(key) {
+          $("tag-" + key).hidden = false;
+        }
+
+        async function choose(key) {
+          $("picker").hidden = true;
+          $("launching").hidden = false;
+          $("launching-title").textContent = "正在启动服务（" + MODES[key].label + "）";
+          $("status").textContent = MODES[key].hint;
+          try {
+            // 就绪后由后端将窗口导航到服务地址
+            await inv("start_service", { mode: key });
+          } catch (err) {
+            $("launching").hidden = true;
+            $("picker").hidden = false;
+            showError(String(err));
+          }
+        }
+
+        async function init() {
+          if (!inv) {
+            setBadge("native", "未检测到", false);
+            setBadge("wsl", "未检测到", false);
+            showError("未检测到 Tauri 运行时，请通过 dsh-desktop 桌面应用打开本页面。");
+            return;
+          }
+          try {
+            const result = await inv("detect_modes");
+            renderMode("native", result.native);
+            renderMode("wsl", result.wsl);
+            if (result.native) {
+              markRecommended("native");
+            } else if (result.wsl) {
+              markRecommended("wsl");
+            }
+            if (!result.native && !result.wsl) {
+              showError(
+                "未检测到可用的启动方式：请在 Windows 本机安装 Node.js，或安装 WSL 发行版并在其中安装 Node.js 后重试。"
+              );
+            }
+          } catch (err) {
+            renderMode("native", false);
+            renderMode("wsl", false);
+            showError("检测启动环境失败：" + err);
+          }
+        }
+
+        init();
+      })();
+    </script>
   </body>
 </html>
